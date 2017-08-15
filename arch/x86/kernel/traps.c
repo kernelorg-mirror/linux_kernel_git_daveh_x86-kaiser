@@ -596,9 +596,9 @@ NOKPROBE_SYMBOL(do_int3);
 
 #ifdef CONFIG_X86_64
 /*
- * Help handler running on IST stack to switch off the IST stack if the
- * interrupted code was in user mode. The actual stack switch is done in
- * entry_64.S
+ * Help handler running on some other stack to switch to the normal
+ * thread stack if interrupted code was in user mode. The actual stack
+ * switch is done in entry_64.S
  */
 asmlinkage __visible notrace struct pt_regs *sync_regs(struct pt_regs *eregs)
 {

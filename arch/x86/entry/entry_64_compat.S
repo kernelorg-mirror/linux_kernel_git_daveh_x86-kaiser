@@ -324,6 +324,10 @@ ENTRY(entry_INT80_compat)
 	pushq   %r15                    /* pt_regs->r15 */
 	cld
 
+	movq	%rsp, %rdi			/* pt_regs pointer */
+	call	sync_regs
+	movq	%rax, %rsp			/* switch stack */
+
 	/*
 	 * User mode is traced as though IRQs are on, and the interrupt
 	 * gate turned them off.

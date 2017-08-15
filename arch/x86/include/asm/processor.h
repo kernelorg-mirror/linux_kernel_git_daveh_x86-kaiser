@@ -339,7 +339,8 @@ struct tss_struct {
 	unsigned long		io_bitmap[IO_BITMAP_LONGS + 1];
 
 	/*
-	 * Space for the temporary SYSENTER stack.
+	 * Space for the temporary SYSENTER stack.  Used for the entry
+	 * trampoline as well.
 	 */
 	unsigned long		SYSENTER_stack_canary;
 	unsigned long		SYSENTER_stack[64];

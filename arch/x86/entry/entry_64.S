@@ -572,6 +572,10 @@ END(irq_entries_start)
 	 */
 	SWAPGS
 
+	movq	%rsp, %rdi			/* pt_regs pointer */
+	call	sync_regs
+	movq	%rax, %rsp			/* switch stack */
+
 	/*
 	 * We need to tell lockdep that IRQs are off.  We can't do this until
 	 * we fix gsbase, and we should do it before enter_from_user_mode
@@ -843,11 +847,12 @@ ENTRY(\sym)
 
 	ALLOC_PT_GPREGS_ON_STACK
 
-	.if \paranoid
-	.if \paranoid == 1
+	.if \paranoid < 2
 	testb	$3, CS(%rsp)			/* If coming from userspace, switch stacks */
-	jnz	1f
+	jnz	.Lfrom_usermode_switch_stack_\@
 	.endif
+
+	.if \paranoid
 	call	paranoid_entry
 	.else
 	call	error_entry
@@ -889,13 +894,13 @@ ENTRY(\sym)
 	jmp	error_exit
 	.endif
 
-	.if \paranoid == 1
+	.if \paranoid < 2
 	/*
-	 * Paranoid entry from userspace.  Switch stacks and treat it
+	 * Entry from userspace.  Switch stacks and treat it
 	 * as a normal entry.  This means that paranoid handlers
 	 * run in real process context if user_mode(regs).
 	 */
-1:
+.Lfrom_usermode_switch_stack_\@:
 	call	error_entry
 
 

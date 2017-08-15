@@ -1574,9 +1574,11 @@ void cpu_init(void)
 	enter_lazy_tlb(&init_mm, me);
 
 	/*
-	 * Initialize the TSS.  Don't bother initializing sp0, as the initial
-	 * task never enters user mode.
+	 * Initialize the TSS.  sp0 points to the entry trampoline stack
+	 * regardless of what task is running.
 	 */
+	load_sp0((unsigned long)this_cpu_ptr(&cpu_tss) +
+		 offsetofend(struct tss_struct, SYSENTER_stack));
 	set_tss_desc(cpu, t);
 	load_TR_desc();
 

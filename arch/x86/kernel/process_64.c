@@ -466,7 +466,6 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
 
 	/* Reload sp0. */
 	update_sp0(next_p);
-
 	/*
 	 * Now maybe reload the debug registers and handle I/O bitmaps
 	 */

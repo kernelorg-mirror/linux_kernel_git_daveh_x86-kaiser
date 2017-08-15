@@ -92,7 +92,7 @@ static inline void update_sp0(struct task_struct *task)
 #ifdef CONFIG_X86_32
 	load_sp0(task->thread.sp0);
 #else
-	load_sp0(task_top_of_stack(task));
+	/* On x86_64, sp0 always points to the entry trampoline stack. */
 #endif
 }
 
