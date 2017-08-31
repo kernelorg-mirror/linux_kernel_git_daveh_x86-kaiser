@@ -1420,20 +1420,21 @@ EXPORT_PER_CPU_SYMBOL(current_task);
 DEFINE_PER_CPU(int, __preempt_count) = INIT_PREEMPT_COUNT;
 EXPORT_PER_CPU_SYMBOL(__preempt_count);
 
-/*
- * On x86_32, vm86 modifies tss.sp0, so sp0 isn't a reliable way to find
- * the top of the kernel stack.  Use an extra percpu variable to track the
- * top of the kernel stack directly.
- */
-DEFINE_PER_CPU(unsigned long, cpu_current_top_of_stack) =
-	(unsigned long)&init_thread_union + THREAD_SIZE;
-EXPORT_PER_CPU_SYMBOL(cpu_current_top_of_stack);
-
 #ifdef CONFIG_CC_STACKPROTECTOR
 DEFINE_PER_CPU_ALIGNED(struct stack_canary, stack_canary);
 #endif
 
 #endif	/* CONFIG_X86_64 */
+
+/*
+ * On x86_32, vm86 modifies tss.sp0, so sp0 isn't a reliable way to find the
+ * top of the kernel stack.  On x86_64, tss.sp0 points to the entry
+ * trampoline, not the thread stack.  Use an extra percpu variable to track
+ * the top of the kernel stack directly.
+ */
+DEFINE_PER_CPU(unsigned long, cpu_current_top_of_stack) =
+	(unsigned long)&init_thread_union + THREAD_SIZE;
+EXPORT_PER_CPU_SYMBOL(cpu_current_top_of_stack);
 
 /*
  * Clear all 6 debug registers:

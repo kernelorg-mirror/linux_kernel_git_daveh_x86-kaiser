@@ -357,9 +357,7 @@ DECLARE_PER_CPU_SHARED_ALIGNED(struct tss_struct, cpu_tss);
 #define __KERNEL_TSS_LIMIT	\
 	(IO_BITMAP_OFFSET + IO_BITMAP_BYTES + sizeof(unsigned long) - 1)
 
-#ifdef CONFIG_X86_32
 DECLARE_PER_CPU(unsigned long, cpu_current_top_of_stack);
-#endif
 
 /*
  * Save the original ist values for checking stack pointers during debugging
@@ -530,12 +528,11 @@ static inline void native_swapgs(void)
 
 static inline unsigned long current_top_of_stack(void)
 {
-#ifdef CONFIG_X86_64
-	return this_cpu_read_stable(cpu_tss.x86_tss.sp0);
-#else
-	/* sp0 on x86_32 is special in and around vm86 mode. */
+	/*
+	 * sp0 on x86_32 is special in and around vm86 mode.  sp0 on
+	 * x86_64 is special because of the entry trampoline.
+	 */
 	return this_cpu_read_stable(cpu_current_top_of_stack);
-#endif
 }
 
 static inline bool on_thread_stack(void)
