@@ -1,6 +1,7 @@
 #include <linux/jump_label.h>
 #include <asm/unwind_hints.h>
 #include <asm/cpufeatures.h>
+#include <asm/page_types.h>
 
 /*
 
@@ -218,10 +219,19 @@ For 32-bit we have the following conventions - kernel is built with
 #endif
 .endm
 
+#ifdef CONFIG_KAISER
+
+/* KAISER PGDs are 8k.  We flip bit 12 to switch between the two halves: */
+#define KAISER_SWITCH_MASK (1<<PAGE_SHIFT)
+
 .macro ADJUST_KERNEL_CR3 reg:req
+	/* Clear "KAISER bit", point CR3 at kernel pagetables: */
+	andq	$(~KAISER_SWITCH_MASK), \reg
 .endm
 
 .macro ADJUST_USER_CR3 reg:req
+	/* Move CR3 up a page to the user page tables: */
+	orq	$(KAISER_SWITCH_MASK), \reg
 .endm
 
 .macro SWITCH_TO_KERNEL_CR3 scratch_reg:req
@@ -240,10 +250,10 @@ For 32-bit we have the following conventions - kernel is built with
 	movq	%cr3, %r\scratch_reg
 	movq	%r\scratch_reg, \save_reg
 	/*
-	 * Just stick a random bit in here that never gets set.  Fixed
+	 * Is the switch bit zero?  This means the address is
 	 * up in real KAISER patches in a moment.
 	 */
-	bt	$63, %r\scratch_reg
+	testq	$(KAISER_SWITCH_MASK), %r\scratch_reg
 	jz	.Ldone_\@
 
 	ADJUST_KERNEL_CR3 %r\scratch_reg
@@ -253,9 +263,25 @@ For 32-bit we have the following conventions - kernel is built with
 .endm
 
 .macro RESTORE_CR3 save_reg:req
-	/* optimize this */
+	/*
+	 * We could avoid the CR3 write if not changing its value,
+	 * but that requires a CR3 read *and* a scratch register.
+	 */
 	movq	\save_reg, %cr3
 .endm
+
+#else /* CONFIG_KAISER=n: */
+
+.macro SWITCH_TO_KERNEL_CR3 scratch_reg:req
+.endm
+.macro SWITCH_TO_USER_CR3 scratch_reg:req
+.endm
+.macro SAVE_AND_SWITCH_TO_KERNEL_CR3 scratch_reg:req save_reg:req
+.endm
+.macro RESTORE_CR3 save_reg:req
+.endm
+
+#endif
 
 #endif /* CONFIG_X86_64 */
 
