@@ -329,6 +329,16 @@ void __init kaiser_init(void)
 	kaiser_add_user_map_early((void *)idt_descr.address,
 				  sizeof(gate_desc) * NR_VECTORS,
 				  __PAGE_KERNEL_RO);
+
+	/*
+	 * We could theoretically do this in setup_fixmap_gdt().
+	 * But, we would need to rewrite the above page table
+	 * allocation code to use the bootmem allocator.  The
+	 * buddy allocator is not available at the time that we
+	 * call setup_fixmap_gdt() for CPU 0.
+	 */
+	kaiser_add_user_map_early(get_cpu_gdt_ro(0), PAGE_SIZE,
+				  __PAGE_KERNEL_RO);
 }
 
 int kaiser_add_mapping(unsigned long addr, unsigned long size,
