@@ -213,13 +213,8 @@ static pte_t *kaiser_shadow_pagetable_walk(unsigned long address,
 	return pte_offset_kernel(pmd, address);
 }
 
-/*
- * Given a kernel address, @__start_addr, copy that mapping into
- * the user (shadow) page tables.  This may need to allocate page
- * table pages.
- */
-int kaiser_add_user_map(const void *__start_addr, unsigned long size,
-			unsigned long flags)
+static int __kaiser_add_user_map(const void *__start_addr, unsigned long size,
+				 unsigned long flags)
 {
 	pte_t *pte;
 	unsigned long start_addr = (unsigned long)__start_addr;
@@ -252,13 +247,41 @@ int kaiser_add_user_map(const void *__start_addr, unsigned long size,
 }
 
 /*
+ * Given a kernel address, @__start_addr, copy that mapping into
+ * the user (shadow) page tables.  This may need to allocate page
+ * table pages.
+ */
+int kaiser_add_user_map(const void *__start_addr, unsigned long size,
+			unsigned long flags)
+{
+	/*
+	 * Since this mapping is the same between the user and kernel
+	 * copies *and* is mapped to userspace anyway (and thus
+	 * exposed to side-channels anyway), there is no danger in
+	 * setting this Global
+	 *
+	 * This has a potential performance benefit because it will
+	 * reduce the reloading of the TLB at entry/exit time since
+	 * that code is mapped this way.
+	 */
+	flags |= _PAGE_GLOBAL;
+
+	return __kaiser_add_user_map(__start_addr, size, flags);
+}
+
+/*
  * The stack mapping is called in generic code and can't use
  * __PAGE_KERNEL
  */
 int kaiser_map_stack(struct task_struct *tsk)
 {
-	return kaiser_add_mapping((unsigned long)tsk->stack, THREAD_SIZE,
-				  __PAGE_KERNEL);
+	/*
+	 * Note: This intentionally avoids the _PAGE_GLOBAL bit being
+	 * set via kaiser_add_user_map().  We do not want it set for
+	 * stacks.
+	 */
+	return __kaiser_add_user_map(tsk->stack, THREAD_SIZE,
+				      __PAGE_KERNEL);
 }
 
 int kaiser_add_user_map_ptrs(const void *__start_addr,
