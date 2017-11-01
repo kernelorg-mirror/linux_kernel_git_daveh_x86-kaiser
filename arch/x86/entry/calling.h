@@ -1,5 +1,6 @@
 #include <linux/jump_label.h>
 #include <asm/unwind_hints.h>
+#include <asm/cpufeatures.h>
 
 /*
 
@@ -215,6 +216,45 @@ For 32-bit we have the following conventions - kernel is built with
 	.endif
 	orq	$0x1, %rbp
 #endif
+.endm
+
+.macro ADJUST_KERNEL_CR3 reg:req
+.endm
+
+.macro ADJUST_USER_CR3 reg:req
+.endm
+
+.macro SWITCH_TO_KERNEL_CR3 scratch_reg:req
+	mov	%cr3, \scratch_reg
+	ADJUST_KERNEL_CR3 \scratch_reg
+	mov	\scratch_reg, %cr3
+.endm
+
+.macro SWITCH_TO_USER_CR3 scratch_reg:req
+	mov	%cr3, \scratch_reg
+	ADJUST_USER_CR3 \scratch_reg
+	mov	\scratch_reg, %cr3
+.endm
+
+.macro SAVE_AND_SWITCH_TO_KERNEL_CR3 scratch_reg:req save_reg:req
+	movq	%cr3, %r\scratch_reg
+	movq	%r\scratch_reg, \save_reg
+	/*
+	 * Just stick a random bit in here that never gets set.  Fixed
+	 * up in real KAISER patches in a moment.
+	 */
+	bt	$63, %r\scratch_reg
+	jz	.Ldone_\@
+
+	ADJUST_KERNEL_CR3 %r\scratch_reg
+	movq	%r\scratch_reg, %cr3
+
+.Ldone_\@:
+.endm
+
+.macro RESTORE_CR3 save_reg:req
+	/* optimize this */
+	movq	\save_reg, %cr3
 .endm
 
 #endif /* CONFIG_X86_64 */
