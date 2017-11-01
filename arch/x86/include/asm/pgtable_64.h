@@ -2,6 +2,7 @@
 #define _ASM_X86_PGTABLE_64_H
 
 #include <linux/const.h>
+#include <linux/kaiser.h>
 #include <asm/pgtable_64_types.h>
 
 #ifndef __ASSEMBLY__
@@ -196,6 +197,16 @@ static inline bool pgd_userspace_access(pgd_t pgd)
 	return (pgd.pgd & _PAGE_USER);
 }
 
+static inline void kaiser_poison_pgd(pgd_t *pgd)
+{
+	pgd->pgd |= _PAGE_NX;
+}
+
+static inline void kaiser_unpoison_pgd(pgd_t *pgd)
+{
+	pgd->pgd &= ~_PAGE_NX;
+}
+
 /*
  * Returns the pgd_t that the kernel should use in its page tables.
  */
@@ -216,7 +227,8 @@ static inline pgd_t kaiser_set_shadow_pgd(pgd_t *pgdp, pgd_t pgd)
 			 * wrong CR3 value, userspace will crash
 			 * instead of running.
 			 */
-			pgd.pgd |= _PAGE_NX;
+			if (kaiser_active())
+				kaiser_poison_pgd(&pgd);
 		}
 	} else if (!pgd.pgd) {
 		/*
