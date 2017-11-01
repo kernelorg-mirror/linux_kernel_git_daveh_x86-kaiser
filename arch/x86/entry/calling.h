@@ -240,15 +240,21 @@ For 32-bit we have the following conventions - kernel is built with
 .endm
 
 .macro SWITCH_TO_KERNEL_CR3 scratch_reg:req
+	testq	$1, kaiser_asm_do_switch
+	jz	.Lswitch_done_\@
 	mov	%cr3, \scratch_reg
 	ADJUST_KERNEL_CR3 \scratch_reg
 	mov	\scratch_reg, %cr3
+.Lswitch_done_\@:
 .endm
 
 .macro SWITCH_TO_USER_CR3 scratch_reg:req
+	testq	$1, kaiser_asm_do_switch
+	jz	.Lswitch_done_\@
 	mov	%cr3, \scratch_reg
 	ADJUST_USER_CR3 \scratch_reg
 	mov	\scratch_reg, %cr3
+.Lswitch_done_\@:
 .endm
 
 .macro SAVE_AND_SWITCH_TO_KERNEL_CR3 scratch_reg:req save_reg:req
