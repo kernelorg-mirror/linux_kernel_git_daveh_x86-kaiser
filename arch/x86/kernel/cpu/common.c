@@ -5,6 +5,7 @@
 #include <linux/export.h>
 #include <linux/percpu.h>
 #include <linux/string.h>
+#include <linux/kaiser.h>
 #include <linux/ctype.h>
 #include <linux/delay.h>
 #include <linux/sched/mm.h>
@@ -487,6 +488,20 @@ static inline void setup_fixmap_gdt(int cpu)
 #endif
 
 	__set_fixmap(get_cpu_gdt_ro_index(cpu), get_cpu_gdt_paddr(cpu), prot);
+
+	/* CPU 0's mapping is done in kaiser_init() */
+	if (cpu) {
+		int ret;
+
+		ret = kaiser_add_mapping((unsigned long) get_cpu_gdt_ro(cpu),
+					 PAGE_SIZE, __PAGE_KERNEL_RO);
+		/*
+		 * We do not have a good way to fail CPU bringup.
+		 * Just WARN about it and hope we boot far enough
+		 * to get a good log out.
+		 */
+		WARN_ON(ret);
+	}
 }
 
 /* Load the original GDT from the per-cpu structure */
