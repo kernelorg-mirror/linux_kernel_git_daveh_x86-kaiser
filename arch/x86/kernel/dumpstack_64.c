@@ -94,6 +94,26 @@ static bool in_irq_stack(unsigned long *stack, struct stack_info *info)
 	return true;
 }
 
+static bool in_SYSENTER_stack(unsigned long *stack, struct stack_info *info)
+{
+	unsigned long begin = (unsigned long)
+		this_cpu_ptr(&cpu_tss.SYSENTER_stack);
+	unsigned long end   = begin + sizeof(cpu_tss.SYSENTER_stack);
+
+	/* Allow small overflow... */
+	begin -= 4096;
+
+	if (stack < begin || stack >= end)
+		return false;
+
+	info->type	= STACK_TYPE_TASK; /* XXX */
+	info->begin	= (unsigned long *)begin;
+	info->end	= (unsigned long *)end;
+	info->next_sp	= NULL;
+
+	return true;
+}
+
 int get_stack_info(unsigned long *stack, struct task_struct *task,
 		   struct stack_info *info, unsigned long *visit_mask)
 {
@@ -112,6 +132,9 @@ int get_stack_info(unsigned long *stack, struct task_struct *task,
 		goto recursion_check;
 
 	if (in_irq_stack(stack, info))
+		goto recursion_check;
+
+	if (in_SYSENTER_stack(stack, info))
 		goto recursion_check;
 
 	goto unknown;
