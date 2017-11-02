@@ -573,6 +573,7 @@ END(irq_entries_start)
 
 /* 0(%rsp): ~(interrupt number) */
 	.macro interrupt func
+	UNWIND_HINT_IRET_REGS
 	cld
 	ALLOC_PT_GPREGS_ON_STACK
 	SAVE_C_REGS
@@ -591,6 +592,7 @@ END(irq_entries_start)
 	movq	%rsp, %rdi			/* pt_regs pointer */
 	call	sync_regs
 	movq	%rax, %rsp			/* switch stack */
+	ENCODE_FRAME_POINTER
 
 	/*
 	 * We need to tell lockdep that IRQs are off.  We can't do this until
@@ -954,6 +956,7 @@ ENTRY(\sym)
 	movq	%rsp, %rdi			/* pt_regs pointer */
 	call	sync_regs
 	movq	%rax, %rsp			/* switch stack */
+	ENCODE_FRAME_POINTER
 
 	movq	%rsp, %rdi			/* pt_regs pointer */
 
