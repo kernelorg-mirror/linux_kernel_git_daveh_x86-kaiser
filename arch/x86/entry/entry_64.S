@@ -594,6 +594,7 @@ END(irq_entries_start)
 	 * tracking that we're in kernel mode.
 	 */
 	SWAPGS
+	SWITCH_TO_KERNEL_CR3 scratch_reg=%rax
 
 	movq	%rsp, %rdi			/* pt_regs pointer */
 	call	sync_regs
