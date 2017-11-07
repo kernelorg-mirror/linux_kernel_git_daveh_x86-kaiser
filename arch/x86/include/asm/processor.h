@@ -346,7 +346,7 @@ struct tss_struct {
 	unsigned long		SYSENTER_stack[64];
 } ____cacheline_aligned;
 
-DECLARE_PER_CPU_SHARED_ALIGNED_USER_MAPPED(struct tss_struct, cpu_tss);
+DECLARE_PER_CPU_SHARED_ALIGNED(struct tss_struct, cpu_tss);
 
 /*
  * sizeof(unsigned long) coming from an extra "long" at the end
