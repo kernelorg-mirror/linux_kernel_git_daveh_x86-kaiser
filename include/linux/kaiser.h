@@ -11,11 +11,6 @@
  * disabled.
  */
 
-static inline int kaiser_map_stack(struct task_struct *tsk)
-{
-	return 0;
-}
-
 static inline void kaiser_init(void)
 {
 }

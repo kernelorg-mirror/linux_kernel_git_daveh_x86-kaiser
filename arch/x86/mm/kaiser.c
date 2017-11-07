@@ -251,16 +251,6 @@ int kaiser_add_user_map(const void *__start_addr, unsigned long size,
 	return 0;
 }
 
-/*
- * The stack mapping is called in generic code and can't use
- * __PAGE_KERNEL
- */
-int kaiser_map_stack(struct task_struct *tsk)
-{
-	return kaiser_add_mapping((unsigned long)tsk->stack, THREAD_SIZE,
-				  __PAGE_KERNEL);
-}
-
 int kaiser_add_user_map_ptrs(const void *__start_addr,
 			     const void *__end_addr,
 			     unsigned long flags)
