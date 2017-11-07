@@ -50,6 +50,11 @@ extern void kaiser_remove_mapping(unsigned long start, unsigned long size);
  */
 extern void kaiser_init(void);
 
+static inline bool kaiser_active(void)
+{
+	extern int kaiser_enabled;
+	return kaiser_enabled;
+}
 #endif
 
 #endif /* __ASSEMBLY__ */
