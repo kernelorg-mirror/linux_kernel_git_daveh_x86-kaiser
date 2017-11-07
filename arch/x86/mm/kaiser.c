@@ -31,8 +31,20 @@
 #include <asm/tlbflush.h>
 #include <asm/desc.h>
 
+/*
+ * We need a two-stage enable/disable.  One (kaiser_enabled) to stop
+ * the ongoing work that keeps KAISER from being disabled (like PGD
+ * poisoning) and another (kaiser_asm_do_switch) that we set when it
+ * is completely safe to run without doing KAISER switches.
+ */
+int kaiser_enabled;
+
+/*
+ * Sized and aligned so that we can easily map it out to userspace
+ * for use before we have done the assembly CR3 switching.
+ */
 __aligned(PAGE_SIZE)
-unsigned long kaiser_asm_do_switch[PAGE_SIZE/sizeof(unsigned long)] = { 1 };
+unsigned long kaiser_asm_do_switch[PAGE_SIZE/sizeof(unsigned long)];
 
 /*
  * At runtime, the only things we map are some things for CPU
@@ -389,6 +401,15 @@ void __init kaiser_init(void)
 	kaiser_add_user_map_ptrs_early(__irqentry_text_start,
 				       __irqentry_text_end,
 				       __PAGE_KERNEL_RX | _PAGE_GLOBAL);
+
+	if (cpu_feature_enabled(X86_FEATURE_XENPV)) {
+		pr_info("x86/kaiser: Xen PV detected, disabling "
+			"KAISER protection\n");
+	} else {
+		pr_info("x86/kaiser: Unmapping kernel while in userspace\n");
+		kaiser_asm_do_switch[0] = 1;
+		kaiser_enabled = 1;
+	}
 }
 
 int kaiser_add_mapping(unsigned long addr, unsigned long size,
@@ -439,7 +460,6 @@ void kaiser_remove_mapping(unsigned long start, unsigned long size)
 	__native_flush_tlb_global();
 }
 
-int kaiser_enabled = 1;
 static ssize_t kaiser_enabled_read_file(struct file *file, char __user *user_buf,
 			     size_t count, loff_t *ppos)
 {
