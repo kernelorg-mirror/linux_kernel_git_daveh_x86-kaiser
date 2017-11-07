@@ -96,9 +96,8 @@ static bool in_irq_stack(unsigned long *stack, struct stack_info *info)
 
 static bool in_SYSENTER_stack(unsigned long *stack, struct stack_info *info)
 {
-	unsigned long begin = (unsigned long)
-		this_cpu_ptr(&cpu_tss.SYSENTER_stack);
-	unsigned long end   = begin + sizeof(cpu_tss.SYSENTER_stack);
+	void *begin = this_cpu_ptr(&cpu_tss.SYSENTER_stack);
+	void *end   = begin + sizeof(cpu_tss.SYSENTER_stack);
 
 	/* Allow small overflow... */
 	begin -= 4096;
@@ -107,8 +106,8 @@ static bool in_SYSENTER_stack(unsigned long *stack, struct stack_info *info)
 		return false;
 
 	info->type	= STACK_TYPE_TASK; /* XXX */
-	info->begin	= (unsigned long *)begin;
-	info->end	= (unsigned long *)end;
+	info->begin	= begin;
+	info->end	= end;
 	info->next_sp	= NULL;
 
 	return true;
