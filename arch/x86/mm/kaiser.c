@@ -326,6 +326,13 @@ extern char __per_cpu_user_mapped_start[], __per_cpu_user_mapped_end[];
  * will have most of the kernel up by then and should be able to
  * get a clean warning out of it.  If we BUG_ON() here, we run
  * the risk of being before we have good console output.
+ *
+ * When KAISER is enabled, we remove _PAGE_GLOBAL from all of the
+ * kernel PTE permissions.  This ensures that the TLB entries for
+ * the kernel are not available when in userspace.  However, for
+ * the pages that are available to userspace *anyway*, we might as
+ * well continue to map them _PAGE_GLOBAL and enjoy the potential
+ * performance advantages.
  */
 void __init kaiser_init(void)
 {
