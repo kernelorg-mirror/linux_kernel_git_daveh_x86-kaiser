@@ -270,6 +270,14 @@ int kaiser_add_user_map_ptrs(const void *__start_addr,
 				   flags);
 }
 
+static int kaiser_user_map_ptr_early(const void *start_addr, unsigned long size,
+				 unsigned long flags)
+{
+	int ret = kaiser_add_user_map(start_addr, size, flags);
+	WARN_ON(ret);
+	return ret;
+}
+
 /*
  * Ensure that the top level of the (shadow) page tables are
  * entirely populated.  This ensures that all processes that get
@@ -357,6 +365,10 @@ void __init kaiser_init(void)
 	kaiser_add_user_map_early((void *)idt_descr.address,
 				  sizeof(gate_desc) * NR_VECTORS,
 				  __PAGE_KERNEL_RO | _PAGE_GLOBAL);
+
+	kaiser_user_map_ptr_early(&debug_idt_table,
+				  sizeof(gate_desc) * NR_VECTORS,
+				  __PAGE_KERNEL | _PAGE_GLOBAL);
 
 	/*
 	 * We could theoretically do this in setup_fixmap_gdt().
