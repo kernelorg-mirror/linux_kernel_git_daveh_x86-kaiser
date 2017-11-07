@@ -91,6 +91,9 @@ ENTRY(entry_SYSENTER_compat)
 	pushq   $0			/* pt_regs->r15 = 0 */
 	cld
 
+	/* We just saved all the registers, so safe to clobber %rdi */
+	SWITCH_TO_KERNEL_CR3 scratch_reg=%rdi
+
 	/*
 	 * SYSENTER doesn't filter flags, so we need to clear NT and AC
 	 * ourselves.  To save a few cycles, we can check whether
@@ -214,6 +217,8 @@ GLOBAL(entry_SYSCALL_compat_after_hwframe)
 	pushq   $0			/* pt_regs->r14 = 0 */
 	pushq   $0			/* pt_regs->r15 = 0 */
 
+	SWITCH_TO_KERNEL_CR3 scratch_reg=%rdi
+
 	/*
 	 * User mode is traced as though IRQs are on, and SYSENTER
 	 * turned them off.
@@ -240,6 +245,7 @@ sysret32_from_system_call:
 	popq	%rsi			/* pt_regs->si */
 	popq	%rdi			/* pt_regs->di */
 
+	SWITCH_TO_USER_CR3 scratch_reg=%r8
         /*
          * USERGS_SYSRET32 does:
          *  GSBASE = user's GS base
@@ -323,6 +329,8 @@ ENTRY(entry_INT80_compat)
 	pushq   %r14                    /* pt_regs->r14 */
 	pushq   %r15                    /* pt_regs->r15 */
 	cld
+
+	SWITCH_TO_KERNEL_CR3 scratch_reg=%r11
 
 	movq	%rsp, %rdi			/* pt_regs pointer */
 	call	sync_regs
