@@ -248,8 +248,6 @@ static unsigned long *alloc_thread_stack_node(struct task_struct *tsk, int node)
 
 static inline void free_thread_stack(struct task_struct *tsk)
 {
-	kaiser_remove_mapping((unsigned long)tsk->stack, THREAD_SIZE);
-
 #ifdef CONFIG_VMAP_STACK
 	if (task_stack_vm_area(tsk)) {
 		int i;
@@ -539,9 +537,6 @@ static struct task_struct *dup_task_struct(struct task_struct *orig, int node)
 	 * functions again.
 	 */
 	tsk->stack = stack;
-	err = kaiser_map_stack(tsk);
-	if (err)
-		goto free_stack;
 #ifdef CONFIG_VMAP_STACK
 	tsk->stack_vm_area = stack_vm_area;
 #endif

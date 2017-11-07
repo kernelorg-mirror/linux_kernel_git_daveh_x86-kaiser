@@ -33,8 +33,6 @@
 extern int kaiser_add_mapping(unsigned long addr, unsigned long size,
 			      unsigned long flags);
 
-extern int kaiser_map_stack(struct task_struct *tsk);
-
 /**
  *  kaiser_remove_mapping - remove a kernel mapping from the userpage tables
  *  @addr: the start address of the range

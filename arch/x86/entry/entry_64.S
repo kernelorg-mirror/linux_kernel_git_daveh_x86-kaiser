@@ -145,6 +145,16 @@ ENTRY(entry_SYSCALL_64)
 
 	swapgs
 	movq	%rsp, PER_CPU_VAR(rsp_scratch)
+
+	/*
+	 * We need a good kernel CR3 to be able to map the process
+	 * stack, but we need a scratch register to be able to load
+	 * CR3.  We could create another PER_CPU_VAR(), but %rsp is
+	 * actually clobberable right now.  Just use it.  It will only
+	 * be insane for one a couple instructions.
+	 */
+	SWITCH_TO_KERNEL_CR3 scratch_reg=%rsp
+
 	movq	PER_CPU_VAR(cpu_current_top_of_stack), %rsp
 
 	/* Construct struct pt_regs on stack */
@@ -168,8 +178,6 @@ GLOBAL(entry_SYSCALL_64_after_hwframe)
 	UNWIND_HINT_REGS extra=0
 
 	/* NB: right here, all regs except r11 are live. */
-
-	SWITCH_TO_KERNEL_CR3 scratch_reg=%r11
 
 	/* Must wait until we have the kernel CR3 to call C functions: */
 	TRACE_IRQS_OFF
@@ -1270,6 +1278,7 @@ ENTRY(error_entry)
 	 * gsbase and proceed.  We'll fix up the exception and land in
 	 * .Lgs_change's error handler with kernel gsbase.
 	 */
+	SWITCH_TO_KERNEL_CR3 scratch_reg=%rax
 	SWAPGS
 	jmp .Lerror_entry_done
 
@@ -1379,6 +1388,7 @@ ENTRY(nmi)
 
 	swapgs
 	cld
+	SWITCH_TO_KERNEL_CR3 scratch_reg=%rdx
 	movq	%rsp, %rdx
 	movq	PER_CPU_VAR(cpu_current_top_of_stack), %rsp
 	UNWIND_HINT_IRET_REGS base=%rdx offset=8
@@ -1407,7 +1417,6 @@ ENTRY(nmi)
 	UNWIND_HINT_REGS
 	ENCODE_FRAME_POINTER
 
-	SWITCH_TO_KERNEL_CR3 scratch_reg=%rdi
 	/*
 	 * At this point we no longer need to worry about stack damage
 	 * due to nesting -- we're on the normal thread stack and we're

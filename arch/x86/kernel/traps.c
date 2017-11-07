@@ -329,6 +329,43 @@ __visible void __noreturn handle_stack_overflow(const char *message,
 }
 #endif
 
+/*
+ * This "fakes" a #GP from userspace upon returning (iret'ing)
+ * from this double fault.
+ */
+void setup_fake_gp_at_iret(struct pt_regs *regs)
+{
+	unsigned long *new_stack_top = (unsigned long *)
+		(this_cpu_read(cpu_tss.x86_tss.ist[0]) - 0x1500);
+
+	/*
+ 	 * Set up a stack just like the hardware would for a #GP.
+	 *
+	 * This format is an "iret frame", plus the error code
+	 * that the hardware puts on the stack for us for
+	 * exceptions.  (see struct pt_regs).
+	 */
+	new_stack_top[-1] = regs->ss;
+	new_stack_top[-2] = regs->sp;
+	new_stack_top[-3] = regs->flags;
+	new_stack_top[-4] = regs->cs;
+	new_stack_top[-5] = regs->ip;
+	new_stack_top[-6] = 0;	/* faked #GP error code */
+
+	/*
+	 * 'regs' points to the "iret frame" for *this*
+	 * exception, *not* the #GP we are faking.  Here,
+	 * we are telling 'iret' to jump to general_protection
+	 * when returning from this double fault.
+	 */
+	regs->ip = (unsigned long)general_protection;
+	/*
+	 * Make iret move the stack to the "fake #GP" stack
+	 * we created above.
+	 */
+	regs->sp = (unsigned long)&new_stack_top[-6];
+}
+
 #ifdef CONFIG_X86_64
 /* Runs on IST stack */
 dotraplinkage void do_double_fault(struct pt_regs *regs, long error_code)
@@ -354,14 +391,7 @@ dotraplinkage void do_double_fault(struct pt_regs *regs, long error_code)
 		regs->cs == __KERNEL_CS &&
 		regs->ip == (unsigned long)native_irq_return_iret)
 	{
-		struct pt_regs *normal_regs = task_pt_regs(current);
-
-		/* Fake a #GP(0) from userspace. */
-		memmove(&normal_regs->ip, (void *)regs->sp, 5*8);
-		normal_regs->orig_ax = 0;  /* Missing (lost) #GP error code */
-		regs->ip = (unsigned long)general_protection;
-		regs->sp = (unsigned long)&normal_regs->orig_ax;
-
+		setup_fake_gp_at_iret(regs);
 		return;
 	}
 #endif
