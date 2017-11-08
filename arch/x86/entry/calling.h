@@ -208,19 +208,29 @@ For 32-bit we have the following conventions - kernel is built with
 	orq     $(KAISER_SWITCH_MASK), \reg
 .endm
 
+.macro JUMP_IF_KAISER_OFF	label
+	testq   $1, kaiser_asm_do_switch
+	jz      \label
+.endm
+
 .macro SWITCH_TO_KERNEL_CR3 scratch_reg:req
+	JUMP_IF_KAISER_OFF	.Lswitch_done_\@
 	mov	%cr3, \scratch_reg
 	ADJUST_KERNEL_CR3 \scratch_reg
 	mov	\scratch_reg, %cr3
+.Lswitch_done_\@:
 .endm
 
 .macro SWITCH_TO_USER_CR3 scratch_reg:req
+	JUMP_IF_KAISER_OFF	.Lswitch_done_\@
 	mov	%cr3, \scratch_reg
 	ADJUST_USER_CR3 \scratch_reg
 	mov	\scratch_reg, %cr3
+.Lswitch_done_\@:
 .endm
 
 .macro SAVE_AND_SWITCH_TO_KERNEL_CR3 scratch_reg:req save_reg:req
+	JUMP_IF_KAISER_OFF	.Ldone_\@
 	movq	%cr3, %r\scratch_reg
 	movq	%r\scratch_reg, \save_reg
 	/*
@@ -243,11 +253,13 @@ For 32-bit we have the following conventions - kernel is built with
 .endm
 
 .macro RESTORE_CR3 save_reg:req
+	JUMP_IF_KAISER_OFF	.Ldone_\@
 	/*
 	 * We could avoid the CR3 write if not changing its value,
 	 * but that requires a CR3 read *and* a scratch register.
 	 */
 	movq	\save_reg, %cr3
+.Ldone_\@:
 .endm
 
 #else /* CONFIG_KAISER=n: */
