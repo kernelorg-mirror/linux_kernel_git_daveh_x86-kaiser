@@ -74,6 +74,18 @@ static inline u64 inc_mm_tlb_gen(struct mm_struct *mm)
 	return new_tlb_gen;
 }
 
+/* There are 12 bits of space for ASIDS in CR3 */
+#define CR3_HW_ASID_BITS 12
+/* When enabled, KAISER consumes a single bit for user/kernel switches */
+#define KAISER_CONSUMED_ASID_BITS 0
+
+#define CR3_AVAIL_ASID_BITS (CR3_HW_ASID_BITS-KAISER_CONSUMED_ASID_BITS)
+/*
+ * We lose a single extra ASID because 0 is reserved for use
+ * by non-PCID-aware users.
+ */
+#define NR_AVAIL_ASIDS ((1<<CR3_AVAIL_ASID_BITS) - 1)
+
 /*
  * If PCID is on, ASID-aware code paths put the ASID+1 into the PCID
  * bits.  This serves two purposes.  It prevents a nasty situation in
@@ -87,7 +99,7 @@ struct pgd_t;
 static inline unsigned long build_cr3(pgd_t *pgd, u16 asid)
 {
 	if (static_cpu_has(X86_FEATURE_PCID)) {
-		VM_WARN_ON_ONCE(asid > 4094);
+		VM_WARN_ON_ONCE(asid > NR_AVAIL_ASIDS);
 		return __sme_pa(pgd) | (asid + 1);
 	} else {
 		VM_WARN_ON_ONCE(asid != 0);
@@ -97,7 +109,7 @@ static inline unsigned long build_cr3(pgd_t *pgd, u16 asid)
 
 static inline unsigned long build_cr3_noflush(pgd_t *pgd, u16 asid)
 {
-	VM_WARN_ON_ONCE(asid > 4094);
+	VM_WARN_ON_ONCE(asid > NR_AVAIL_ASIDS);
 	return __sme_pa(pgd) | (asid + 1) | CR3_NOFLUSH;
 }
 
