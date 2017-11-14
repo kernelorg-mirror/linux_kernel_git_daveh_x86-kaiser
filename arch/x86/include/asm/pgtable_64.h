@@ -130,9 +130,88 @@ static inline pud_t native_pudp_get_and_clear(pud_t *xp)
 #endif
 }
 
+#ifdef CONFIG_KAISER
+/*
+ * All top-level KAISER page tables are order-1 pages (8k-aligned
+ * and 8k in size).  The kernel one is at the beginning 4k and
+ * the user (shadow) one is in the last 4k.  To switch between
+ * them, you just need to flip the 12th bit in their addresses.
+ */
+#define KAISER_PGTABLE_SWITCH_BIT	PAGE_SHIFT
+
+/*
+ * This generates better code than the inline assembly in
+ * __set_bit().
+ */
+static inline void *ptr_set_bit(void *ptr, int bit)
+{
+	unsigned long __ptr = (unsigned long)ptr;
+	__ptr |= (1<<bit);
+	return (void *)__ptr;
+}
+static inline void *ptr_clear_bit(void *ptr, int bit)
+{
+	unsigned long __ptr = (unsigned long)ptr;
+	__ptr &= ~(1<<bit);
+	return (void *)__ptr;
+}
+
+static inline pgd_t *native_get_shadow_pgd(pgd_t *pgdp)
+{
+	return ptr_set_bit(pgdp, KAISER_PGTABLE_SWITCH_BIT);
+}
+static inline pgd_t *native_get_normal_pgd(pgd_t *pgdp)
+{
+	return ptr_clear_bit(pgdp, KAISER_PGTABLE_SWITCH_BIT);
+}
+static inline p4d_t *native_get_shadow_p4d(p4d_t *p4dp)
+{
+	return ptr_set_bit(p4dp, KAISER_PGTABLE_SWITCH_BIT);
+}
+static inline p4d_t *native_get_normal_p4d(p4d_t *p4dp)
+{
+	return ptr_clear_bit(p4dp, KAISER_PGTABLE_SWITCH_BIT);
+}
+#endif /* CONFIG_KAISER */
+
+/*
+ * Page table pages are page-aligned.  The lower half of the top
+ * level is used for userspace and the top half for the kernel.
+ * This returns true for user pages that need to get copied into
+ * both the user and kernel copies of the page tables, and false
+ * for kernel pages that should only be in the kernel copy.
+ */
+static inline bool is_userspace_pgd(void *__ptr)
+{
+	unsigned long ptr = (unsigned long)__ptr;
+
+	return ((ptr % PAGE_SIZE) < (PAGE_SIZE / 2));
+}
+
 static inline void native_set_p4d(p4d_t *p4dp, p4d_t p4d)
 {
+#if defined(CONFIG_KAISER) && !defined(CONFIG_X86_5LEVEL)
+	/*
+	 * set_pgd() does not get called when we are running
+	 * CONFIG_X86_5LEVEL=y.  So, just hack around it.  We
+	 * know here that we have a p4d but that it is really at
+	 * the top level of the page tables; it is really just a
+	 * pgd.
+	 */
+	/* Do we need to also populate the shadow p4d? */
+	if (is_userspace_pgd(p4dp))
+		native_get_shadow_p4d(p4dp)->pgd = p4d.pgd;
+	/*
+	 * Even if the entry is *mapping* userspace, ensure
+	 * that userspace can not use it.  This way, if we
+	 * get out to userspace with the wrong CR3 value,
+	 * userspace will crash instead of running.
+	 */
+	if (!p4d.pgd.pgd)
+		p4dp->pgd.pgd = p4d.pgd.pgd | _PAGE_NX;
+#else /* CONFIG_KAISER */
 	*p4dp = p4d;
+#endif
 }
 
 static inline void native_p4d_clear(p4d_t *p4d)
@@ -146,7 +225,21 @@ static inline void native_p4d_clear(p4d_t *p4d)
 
 static inline void native_set_pgd(pgd_t *pgdp, pgd_t pgd)
 {
+#ifdef CONFIG_KAISER
+	/* Do we need to also populate the shadow pgd? */
+	if (is_userspace_pgd(pgdp))
+		native_get_shadow_pgd(pgdp)->pgd = pgd.pgd;
+	/*
+	 * Even if the entry is mapping userspace, ensure
+	 * that it is unusable for userspace.  This way,
+	 * if we get out to userspace with the wrong CR3
+	 * value, userspace will crash instead of running.
+	 */
+	if (!pgd_none(pgd))
+		pgdp->pgd = pgd.pgd | _PAGE_NX;
+#else /* CONFIG_KAISER */
 	*pgdp = pgd;
+#endif
 }
 
 static inline void native_pgd_clear(pgd_t *pgd)
