@@ -48,6 +48,10 @@
 ENTRY(entry_SYSENTER_compat)
 	/* Interrupts are off on entry. */
 	SWAPGS
+
+	/* We are about to clobber %rsp anyway, clobbering here is OK */
+	SWITCH_TO_KERNEL_CR3 scratch_reg=%rsp
+
 	movq	PER_CPU_VAR(cpu_current_top_of_stack), %rsp
 
 	/*
@@ -215,6 +219,12 @@ GLOBAL(entry_SYSCALL_compat_after_hwframe)
 	pushq   $0			/* pt_regs->r15 = 0 */
 
 	/*
+	 * We just saved %rdi so it is safe to clobber.  It is not
+	 * preserved during the C calls inside TRACE_IRQS_OFF anyway.
+	 */
+	SWITCH_TO_KERNEL_CR3 scratch_reg=%rdi
+
+	/*
 	 * User mode is traced as though IRQs are on, and SYSENTER
 	 * turned them off.
 	 */
@@ -255,10 +265,22 @@ sysret32_from_system_call:
 	 * when the system call started, which is already known to user
 	 * code.  We zero R8-R10 to avoid info leaks.
          */
+	movq	RSP-ORIG_RAX(%rsp), %rsp
+
+	/*
+	 * The original userspace %rsp (RSP-ORIG_RAX(%rsp)) is stored
+	 * on the process stack which is not mapped to userspace and
+	 * not readable after we SWITCH_TO_USER_CR3.  Delay the CR3
+	 * switch until after after the last reference to the process
+	 * stack.
+	 *
+	 * %r8 is zeroed before the sysret, thus safe to clobber.
+	 */
+	SWITCH_TO_USER_CR3 scratch_reg=%r8
+
 	xorq	%r8, %r8
 	xorq	%r9, %r9
 	xorq	%r10, %r10
-	movq	RSP-ORIG_RAX(%rsp), %rsp
 	swapgs
 	sysretl
 END(entry_SYSCALL_compat)
@@ -323,6 +345,12 @@ ENTRY(entry_INT80_compat)
 	pushq   %r14                    /* pt_regs->r14 */
 	pushq   %r15                    /* pt_regs->r15 */
 	cld
+
+	/*
+	 * It is obviously safe to use %rdi since overwritten with
+	 * pt_regs next.
+	 */
+	SWITCH_TO_KERNEL_CR3 scratch_reg=%rdi
 
 	movq	%rsp, %rdi			/* pt_regs pointer */
 	call	sync_regs
