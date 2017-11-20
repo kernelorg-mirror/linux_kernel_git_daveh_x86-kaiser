@@ -359,7 +359,7 @@ dotraplinkage void do_double_fault(struct pt_regs *regs, long error_code)
 		regs->cs == __KERNEL_CS &&
 		regs->ip == (unsigned long)native_irq_return_iret)
 	{
-		struct pt_regs *normal_regs = task_pt_regs(current);
+		struct pt_regs *normal_regs = (struct pt_regs *)this_cpu_read(cpu_tss.x86_tss.sp0) - 1;
 
 		/* Fake a #GP(0) from userspace. */
 		memmove(&normal_regs->ip, (void *)regs->sp, 5*8);
@@ -390,7 +390,7 @@ dotraplinkage void do_double_fault(struct pt_regs *regs, long error_code)
 	 *
 	 *   Processors update CR2 whenever a page fault is detected. If a
 	 *   second page fault occurs while an earlier page fault is being
-	 *   deliv- ered, the faulting linear address of the second fault will
+	 *   delivered, the faulting linear address of the second fault will
 	 *   overwrite the contents of CR2 (replacing the previous
 	 *   address). These updates to CR2 occur even if the page fault
 	 *   results in a double fault or occurs during the delivery of a
