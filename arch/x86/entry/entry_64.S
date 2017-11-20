@@ -560,6 +560,14 @@ END(irq_entries_start)
 	.macro interrupt func
 	cld
 	ALLOC_PT_GPREGS_ON_STACK
+
+	testb	$3, CS(%rsp)
+	jz	1f
+	SWAPGS
+	call	switch_to_thread_stack
+	SWAPGS
+1:
+
 	SAVE_C_REGS
 	SAVE_EXTRA_REGS
 	ENCODE_FRAME_POINTER
@@ -827,6 +835,33 @@ apicinterrupt IRQ_WORK_VECTOR			irq_work_interrupt		smp_irq_work_interrupt
  */
 #define CPU_TSS_IST(x) PER_CPU_VAR(cpu_tss) + (TSS_ist + ((x) - 1) * 8)
 
+/*
+ * Switch to the thread stack.  This is called with the IRET frame and
+ * orig_ax in pt_regs and the rest of pt_regs allocated, but with all GPRs
+ * in the CPU registers.
+ */
+ENTRY(switch_to_thread_stack)
+	UNWIND_HINT_IRET_REGS offset=17*8
+
+	movq	%rdi, RDI+8(%rsp)
+	movq	%rsp, %rdi
+	movq	PER_CPU_VAR(cpu_current_top_of_stack), %rsp
+	UNWIND_HINT_IRET_REGS offset=17*8 base=%rdi
+
+	pushq	SS+8(%rdi)		/* regs->ss */
+	pushq	RSP+8(%rdi)		/* regs->rsp */
+	pushq	EFLAGS+8(%rdi)		/* regs->eflags */
+	pushq	CS+8(%rdi)		/* regs->cs */
+	pushq	RIP+8(%rdi)		/* regs->ip */
+	pushq	ORIG_RAX+8(%rdi)	/* regs->orig_ax */
+	ALLOC_PT_GPREGS_ON_STACK	/* allocate the rest of regs */
+	pushq	(%rdi)			/* return address */
+
+	movq	RDI+8(%rdi), %rdi
+	UNWIND_HINT_IRET_REGS offset=17*8
+	ret
+END(switch_to_thread_stack)
+
 .macro idtentry sym do_sym has_error_code:req paranoid=0 shift_ist=-1
 ENTRY(\sym)
 	UNWIND_HINT_IRET_REGS offset=\has_error_code*8
@@ -844,11 +879,12 @@ ENTRY(\sym)
 
 	ALLOC_PT_GPREGS_ON_STACK
 
-	.if \paranoid
-	.if \paranoid == 1
+	.if \paranoid < 2
 	testb	$3, CS(%rsp)			/* If coming from userspace, switch stacks */
-	jnz	1f
+	jnz	.Lfrom_usermode_switch_stack_\@
 	.endif
+
+	.if \paranoid
 	call	paranoid_entry
 	.else
 	call	error_entry
@@ -890,19 +926,14 @@ ENTRY(\sym)
 	jmp	error_exit
 	.endif
 
-	.if \paranoid == 1
+	.if \paranoid < 2
 	/*
-	 * Paranoid entry from userspace.  Switch stacks and treat it
+	 * Entry from userspace.  Switch stacks and treat it
 	 * as a normal entry.  This means that paranoid handlers
 	 * run in real process context if user_mode(regs).
 	 */
-1:
+.Lfrom_usermode_switch_stack_\@:
 	call	error_entry
-
-
-	movq	%rsp, %rdi			/* pt_regs pointer */
-	call	sync_regs
-	movq	%rax, %rsp			/* switch stack */
 
 	movq	%rsp, %rdi			/* pt_regs pointer */
 
@@ -1164,6 +1195,14 @@ ENTRY(error_entry)
 	SWAPGS
 
 .Lerror_entry_from_usermode_after_swapgs:
+	/* Put us onto the real thread stack. */
+	leaq	8(%rsp), %rdi			/* pt_regs pointer */
+	movq	(%rsp), %r12
+	call	sync_regs
+	movq	%rax, %rsp			/* switch stack */
+	ENCODE_FRAME_POINTER
+	pushq	%r12
+
 	/*
 	 * We need to tell lockdep that IRQs are off.  We can't do this until
 	 * we fix gsbase, and we should do it before enter_from_user_mode

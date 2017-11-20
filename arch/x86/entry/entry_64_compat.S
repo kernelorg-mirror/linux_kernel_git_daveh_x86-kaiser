@@ -297,6 +297,10 @@ ENTRY(entry_INT80_compat)
 	ASM_CLAC			/* Do this early to minimize exposure */
 	SWAPGS
 
+	subq	$16*8, %rsp
+	call	switch_to_thread_stack
+	addq	$16*8, %rsp
+
 	/*
 	 * User tracing code (ptrace or signal handlers) might assume that
 	 * the saved RAX contains a 32-bit number when we're invoking a 32-bit
