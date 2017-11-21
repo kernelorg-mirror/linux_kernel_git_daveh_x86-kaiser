@@ -1440,24 +1440,26 @@ void syscall_init(void)
 	extern char _entry_trampoline[];
 	extern char entry_SYSCALL_64_trampoline[];
 
-	int cpu = smp_processor_id();
-
 	wrmsr(MSR_STAR, 0, (__USER32_CS << 16) | __KERNEL_CS);
 	wrmsrl(MSR_LSTAR, (unsigned long)get_cpu_entry_area(smp_processor_id())->entry_trampoline + (entry_SYSCALL_64_trampoline - _entry_trampoline));
 
 #ifdef CONFIG_IA32_EMULATION
-	wrmsrl(MSR_CSTAR, (unsigned long)entry_SYSCALL_compat);
-	/*
-	 * This only works on Intel CPUs.
-	 * On AMD CPUs these MSRs are 32-bit, CPU truncates MSR_IA32_SYSENTER_EIP.
-	 * This does not cause SYSENTER to jump to the wrong location, because
-	 * AMD doesn't allow SYSENTER in long mode (either 32- or 64-bit).
-	 */
-	wrmsrl_safe(MSR_IA32_SYSENTER_CS, (u64)__KERNEL_CS);
-	wrmsrl_safe(MSR_IA32_SYSENTER_ESP,
-		    (unsigned long)&get_cpu_entry_area(cpu)->tss +
-		    offsetofend(struct tss_struct, SYSENTER_stack));
-	wrmsrl_safe(MSR_IA32_SYSENTER_EIP, (u64)entry_SYSENTER_compat);
+	{
+		int cpu = smp_processor_id();
+
+		wrmsrl(MSR_CSTAR, (unsigned long)entry_SYSCALL_compat);
+		/*
+		 * This only works on Intel CPUs.
+		 * On AMD CPUs these MSRs are 32-bit, CPU truncates MSR_IA32_SYSENTER_EIP.
+		 * This does not cause SYSENTER to jump to the wrong location, because
+		 * AMD doesn't allow SYSENTER in long mode (either 32- or 64-bit).
+		 */
+		wrmsrl_safe(MSR_IA32_SYSENTER_CS, (u64)__KERNEL_CS);
+		wrmsrl_safe(MSR_IA32_SYSENTER_ESP,
+			    (unsigned long)&get_cpu_entry_area(cpu)->tss +
+			    offsetofend(struct tss_struct, SYSENTER_stack));
+		wrmsrl_safe(MSR_IA32_SYSENTER_EIP, (u64)entry_SYSENTER_compat);
+	}
 #else
 	wrmsrl(MSR_CSTAR, (unsigned long)ignore_sysret);
 	wrmsrl_safe(MSR_IA32_SYSENTER_CS, (u64)GDT_ENTRY_INVALID_SEG);
