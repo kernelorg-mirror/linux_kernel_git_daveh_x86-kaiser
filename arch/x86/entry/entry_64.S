@@ -164,6 +164,9 @@ ENTRY(entry_SYSCALL_64_trampoline)
 	/* Stash the user RSP. */
 	movq	%rsp, RSP_SCRATCH
 
+	/* Note: using %rsp as a scratch reg. */
+	SWITCH_TO_KERNEL_CR3 scratch_reg=%rsp
+
 	/* Load the top of the task stack into RSP */
 	movq	CPU_ENTRY_AREA_tss + TSS_sp1 + CPU_ENTRY_AREA, %rsp
 
@@ -207,9 +210,16 @@ ENTRY(entry_SYSCALL_64)
 
 	swapgs
 	movq	%rsp, PER_CPU_VAR(rsp_scratch)
-	movq	PER_CPU_VAR(cpu_current_top_of_stack), %rsp
 
-	TRACE_IRQS_OFF
+	/*
+	 * The kernel CR3 is needed to map the process stack, but we
+	 * need a scratch register to be able to load CR3.  %rsp is
+	 * clobberable right now, so use it as a scratch register.
+	 * %rsp will be look crazy here for a couple instructions.
+	 */
+	SWITCH_TO_KERNEL_CR3 scratch_reg=%rsp
+
+	movq	PER_CPU_VAR(cpu_current_top_of_stack), %rsp
 
 	/* Construct struct pt_regs on stack */
 	pushq	$__USER_DS			/* pt_regs->ss */
@@ -230,6 +240,9 @@ GLOBAL(entry_SYSCALL_64_after_hwframe)
 	pushq	%r11				/* pt_regs->r11 */
 	sub	$(6*8), %rsp			/* pt_regs->bp, bx, r12-15 not saved */
 	UNWIND_HINT_REGS extra=0
+
+	/* Must wait until we have the kernel CR3 to call C functions: */
+	TRACE_IRQS_OFF
 
 	/*
 	 * If we need to do entry work or if we guess we'll need to do
@@ -402,6 +415,7 @@ syscall_return_via_sysret:
 	 * We are on the trampoline stack.  All regs except RDI are live.
 	 * We can do future final exit work right here.
 	 */
+	SWITCH_TO_USER_CR3 scratch_reg=%rdi
 
 	popq	%rdi
 	popq	%rsp
@@ -743,6 +757,8 @@ GLOBAL(swapgs_restore_regs_and_return_to_usermode)
 	 * We can do future final exit work right here.
 	 */
 
+	SWITCH_TO_USER_CR3 scratch_reg=%rdi
+
 	/* Restore RDI. */
 	popq	%rdi
 	SWAPGS
@@ -952,6 +968,10 @@ ENTRY(switch_to_thread_stack)
 	UNWIND_HINT_IRET_REGS offset=17*8
 
 	movq	%rdi, RDI+8(%rsp)
+
+	/* Need to switch before accessing the thread stack. */
+	SWITCH_TO_KERNEL_CR3 scratch_reg=%rdi
+
 	movq	%rsp, %rdi
 	movq	PER_CPU_VAR(cpu_current_top_of_stack), %rsp
 	UNWIND_HINT_IRET_REGS offset=17*8 base=%rdi
@@ -1252,7 +1272,11 @@ ENTRY(paranoid_entry)
 	js	1f				/* negative -> in kernel */
 	SWAPGS
 	xorl	%ebx, %ebx
-1:	ret
+
+1:
+	SAVE_AND_SWITCH_TO_KERNEL_CR3 scratch_reg=ax save_reg=%r14
+
+	ret
 END(paranoid_entry)
 
 /*
@@ -1274,6 +1298,7 @@ ENTRY(paranoid_exit)
 	testl	%ebx, %ebx			/* swapgs needed? */
 	jnz	.Lparanoid_exit_no_swapgs
 	TRACE_IRQS_IRETQ
+	RESTORE_CR3	%r14
 	SWAPGS_UNSAFE_STACK
 	jmp	.Lparanoid_exit_restore
 .Lparanoid_exit_no_swapgs:
@@ -1301,6 +1326,9 @@ ENTRY(error_entry)
 	 * from user mode due to an IRET fault.
 	 */
 	SWAPGS
+
+	/* We have user CR3.  Change to kernel CR3. */
+	SWITCH_TO_KERNEL_CR3 scratch_reg=%rax
 
 .Lerror_entry_from_usermode_after_swapgs:
 	/* Put us onto the real thread stack. */
@@ -1346,6 +1374,7 @@ ENTRY(error_entry)
 	 * gsbase and proceed.  We'll fix up the exception and land in
 	 * .Lgs_change's error handler with kernel gsbase.
 	 */
+	SWITCH_TO_KERNEL_CR3 scratch_reg=%rax
 	SWAPGS
 	jmp .Lerror_entry_done
 
@@ -1356,9 +1385,10 @@ ENTRY(error_entry)
 
 .Lerror_bad_iret:
 	/*
-	 * We came from an IRET to user mode, so we have user gsbase.
-	 * Switch to kernel gsbase:
+	 * We came from an IRET to user mode, so we have user
+	 * gsbase and CR3.  Switch to kernel gsbase and CR3:
 	 */
+	SWITCH_TO_KERNEL_CR3 scratch_reg=%rax
 	SWAPGS
 
 	/*
@@ -1391,6 +1421,10 @@ END(error_exit)
 /*
  * Runs on exception stack.  Xen PV does not go through this path at all,
  * so we can use real assembly here.
+ *
+ * Registers:
+ *	%r14: Used to save/restore the CR3 of the interrupted context
+ *	      when KAISER is in use.  Do not clobber.
  */
 ENTRY(nmi)
 	UNWIND_HINT_IRET_REGS
@@ -1454,6 +1488,7 @@ ENTRY(nmi)
 
 	swapgs
 	cld
+	SWITCH_TO_KERNEL_CR3 scratch_reg=%rdx
 	movq	%rsp, %rdx
 	movq	PER_CPU_VAR(cpu_current_top_of_stack), %rsp
 	UNWIND_HINT_IRET_REGS base=%rdx offset=8
@@ -1705,6 +1740,8 @@ end_repeat_nmi:
 	movq	%rsp, %rdi
 	movq	$-1, %rsi
 	call	do_nmi
+
+	RESTORE_CR3 save_reg=%r14
 
 	testl	%ebx, %ebx			/* swapgs needed? */
 	jnz	nmi_restore
