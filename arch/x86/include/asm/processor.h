@@ -356,7 +356,7 @@ struct tss_struct {
 	unsigned long		io_bitmap[IO_BITMAP_LONGS + 1];
 } __attribute__((__aligned__(PAGE_SIZE)));
 
-DECLARE_PER_CPU_PAGE_ALIGNED(struct tss_struct, cpu_tss);
+DECLARE_PER_CPU_PAGE_ALIGNED_USER_MAPPED(struct tss_struct, cpu_tss);
 
 /*
  * sizeof(unsigned long) coming from an extra "long" at the end
