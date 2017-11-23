@@ -36,6 +36,12 @@
 /* Used by pgtable.h asm code to force instruction serialization. */
 unsigned long __force_order;
 
+/*
+ * We share the kernel_ident_mapping_init(), but the early boot
+ * version does not need the Kaiser-logic:
+ */
+int kaiser_enabled = 0;
+
 /* Used to track our page table allocation area. */
 struct alloc_pgt_data {
 	unsigned char *pgt_buf;
