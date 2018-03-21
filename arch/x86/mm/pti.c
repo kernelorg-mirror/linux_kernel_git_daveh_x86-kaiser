@@ -66,12 +66,22 @@ static void __init pti_print_if_secure(const char *reason)
 		pr_info("%s\n", reason);
 }
 
+enum pti_mode {
+	PTI_AUTO = 0,
+	PTI_FORCE_OFF,
+	PTI_FORCE_ON
+} pti_mode;
+
 void __init pti_check_boottime_disable(void)
 {
 	char arg[5];
 	int ret;
 
+	/* Assume mode is auto unless overridden. */
+	pti_mode = PTI_AUTO;
+
 	if (hypervisor_is_type(X86_HYPER_XEN_PV)) {
+		pti_mode = PTI_FORCE_OFF;
 		pti_print_if_insecure("disabled on XEN PV.");
 		return;
 	}
@@ -79,18 +89,23 @@ void __init pti_check_boottime_disable(void)
 	ret = cmdline_find_option(boot_command_line, "pti", arg, sizeof(arg));
 	if (ret > 0)  {
 		if (ret == 3 && !strncmp(arg, "off", 3)) {
+			pti_mode = PTI_FORCE_OFF;
 			pti_print_if_insecure("disabled on command line.");
 			return;
 		}
 		if (ret == 2 && !strncmp(arg, "on", 2)) {
+			pti_mode = PTI_FORCE_ON;
 			pti_print_if_secure("force enabled on command line.");
 			goto enable;
 		}
-		if (ret == 4 && !strncmp(arg, "auto", 4))
+		if (ret == 4 && !strncmp(arg, "auto", 4)) {
+			pti_mode = PTI_AUTO;
 			goto autosel;
+		}
 	}
 
 	if (cmdline_find_option_bool(boot_command_line, "nopti")) {
+		pti_mode = PTI_FORCE_OFF;
 		pti_print_if_insecure("disabled on command line.");
 		return;
 	}
@@ -373,6 +388,23 @@ void pti_set_kernel_image_nonglobal(void)
 	 */
 	unsigned long start = PFN_ALIGN(_text);
 	unsigned long end = ALIGN((unsigned long)_end, PMD_PAGE_SIZE);
+
+	/*
+	 * Global pages and PCIDs are both ways to make kernel TLB
+	 * entries live longer, reduce TLB misses and improve kernel
+	 * performance.  But, leaving all kernel text Global makes
+	 * it potentially accessible to meltdown-style attacks which
+	 * make it trivial to find gadgets or defeat KASLR.
+	 *
+	 * Leave kernel text global, but only on systems that do not
+	 * have PCIDs and which have not explicitly enabled pti=on.
+	 */
+	if (!cpu_feature_enabled(X86_FEATURE_PCID) &&
+	    (pti_mode == PTI_AUTO)) {
+		pr_debug("processor does not support PCIDs, leaving "
+			 "kernel image global\n");
+		return;
+	}
 
 	pr_debug("set kernel image non-global\n");
 
