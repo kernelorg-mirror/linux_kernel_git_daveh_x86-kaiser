@@ -1485,8 +1485,6 @@ static int change_page_attr_set_clr(unsigned long *addr, int numpages,
 	if (in_flag & (CPA_ARRAY | CPA_PAGES_ARRAY))
 		cpa.flags |= in_flag;
 
-	/* No alias checking for _NX bit modifications */
-	checkalias = (pgprot_val(mask_set) | pgprot_val(mask_clr)) != _PAGE_NX;
 	/* Never check aliases if the caller asks for it explicitly: */
 	if (checkalias && (in_flag & CPA_NO_CHECK_ALIAS))
 		checkalias = 0;
@@ -1750,7 +1748,9 @@ int set_memory_x(unsigned long addr, int numpages)
 	if (!(__supported_pte_mask & _PAGE_NX))
 		return 0;
 
-	return change_page_attr_clear(&addr, numpages, __pgprot(_PAGE_NX), 0);
+	/* NX is not required to be consistent across aliases. */
+	return change_page_attr_clear(&addr, numpages, __pgprot(_PAGE_NX),
+				      CPA_NO_CHECK_ALIAS);
 }
 EXPORT_SYMBOL(set_memory_x);
 
@@ -1759,7 +1759,9 @@ int set_memory_nx(unsigned long addr, int numpages)
 	if (!(__supported_pte_mask & _PAGE_NX))
 		return 0;
 
-	return change_page_attr_set(&addr, numpages, __pgprot(_PAGE_NX), 0);
+	/* NX is not required to be consistent across aliases. */
+	return change_page_attr_set(&addr, numpages, __pgprot(_PAGE_NX),
+				    CPA_NO_CHECK_ALIAS);
 }
 EXPORT_SYMBOL(set_memory_nx);
 
