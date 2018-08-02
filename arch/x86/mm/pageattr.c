@@ -1525,17 +1525,17 @@ out:
 }
 
 static inline int change_page_attr_set(unsigned long *addr, int numpages,
-				       pgprot_t mask, int array)
+				       pgprot_t mask, int flags)
 {
 	return change_page_attr_set_clr(addr, numpages, mask, __pgprot(0), 0,
-		(array ? CPA_ARRAY : 0), NULL);
+		flags, NULL);
 }
 
 static inline int change_page_attr_clear(unsigned long *addr, int numpages,
-					 pgprot_t mask, int array)
+					 pgprot_t mask, int flags)
 {
 	return change_page_attr_set_clr(addr, numpages, __pgprot(0), mask, 0,
-		(array ? CPA_ARRAY : 0), NULL);
+		flags, NULL);
 }
 
 static inline int cpa_set_pages_array(struct page **pages, int numpages,
@@ -1609,7 +1609,8 @@ static int _set_memory_array(unsigned long *addr, int addrinarray,
 				_PAGE_CACHE_MODE_UC_MINUS : new_type;
 
 	ret = change_page_attr_set(addr, addrinarray,
-				   cachemode2pgprot(set_type), 1);
+				   cachemode2pgprot(set_type),
+				   CPA_ARRAY);
 
 	if (!ret && new_type == _PAGE_CACHE_MODE_WC)
 		ret = change_page_attr_set_clr(addr, addrinarray,
@@ -1732,7 +1733,8 @@ int set_memory_array_wb(unsigned long *addr, int addrinarray)
 
 	/* WB cache mode is hard wired to all cache attribute bits being 0 */
 	ret = change_page_attr_clear(addr, addrinarray,
-				      __pgprot(_PAGE_CACHE_MASK), 1);
+				      __pgprot(_PAGE_CACHE_MASK),
+				      CPA_ARRAY);
 	if (ret)
 		return ret;
 
